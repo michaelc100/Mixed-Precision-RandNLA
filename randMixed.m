@@ -1,55 +1,97 @@
-function [Q,err,k] = randMixed(A,tol,p,theta,bsize,q)
-%RANDOMIZED_MP Mixed Precision Randomized subspace iteration 
-%
-%			   A - m-by-n input matrix
-%			   Global tolerance - tolerance for half precision
-%
-%
-%			   Q -- Estimation of range of A
+function [Q, B, err, k] = randMixed(A, tol, precns, theta, b, q)
+% RANDMIXED Mixed precision randomized subspace iteration
+% Inputs:
+% A - input matrix
+% tol - target approximation error (absolute, frobenius norm)
+% p - sequence of increasing unit roundoffs, corresponding to available precisions
+% theta - user chosen parameter which affects precisio switching
+% b - block size
+% q - no. of power iterations
 
-[m,n] = size(A);
-if nargin < 6, q = 0, end
-if nargin < 5
-   q = 0;
-   bSize = min(max(floor(0.1*m), 5), n);
-end
-
-k = zeros(length(p), 1);
-
-err = norm(A, 'fro');
-%calculate theta based off dimensions with a scaling
-if q == 0
-    alpha = 1/(theta*sqrt(m*n*bsize));
-else
-    alpha = 1/(theta*sqrt(m)*bsize);
-end
+% Outputs:
+% Q - orthogonal factor
+% err - vector of errors at each iteration
+% k - vector of no. iterations at each precision
     
-tols = [alpha*tol/p(2) alpha*tol/p(3) tol];
-Q = [];
+[m, n] = size(A);
+% set some default values
 
+if nargin < 6, q = 0, end
+
+if nargin < 5
+    q = 0
+    b = min(max(floor(0.1*m), 5), n);
+end
+
+%calculate alpha needed to set switching tols
+nrmA = norm(A, 'fro');
+if q == 0
+    alpha = 1/(theta*sqrt(m*n*b));
+else
+    alpha = 1/(theta*sqrt(m)*b);
+end
+
+% initialize k
+k = zeros(length(precns), 1);
+
+% pick tolerances that will be used
+% drop those that have unit roundoff greater than tol
+
+p = length(find(precns < tol));
+precns = precns(1:p);
+
+% set up sequence of tolerances
+tols = [];
+for i = 1:p-1
+    tols(i) = alpha*tol/precns(i+1);
+end
+tols(p) = tol;
+
+% initial error
+err = 1;
+
+Q = zeros(m, 0);
+B = zeros(0, n);
+
+% its will count no. of iterations at each precision
 its = 0;
 
-while (err(end,1) >= tol && its < length(p))
+while (err(end, 1) >= tol && its < p)
+    % find lowest precn that will converge
     idx = find(err(end, 1) > tols, 1, 'first');
     its = its + 1;
-    if idx == 1
-        [Qd, Rd, errd, kd] = randDouble(A, tols(1), bsize, q);
-        Q = [Q Qd];
+    % just assume we'd only use fp64, fp32 and fp16
+    if precns(idx) == 2^(-53)
+        [Q, B, Rd, errd, kd] = randDouble(A, tols(idx), b, q);
+        %Q = [Q Qd];
         A = Rd;
-        err(its+1, 1) = errd;
-        k(1) = kd;
-    elseif idx == 2
-        [Qs, Rs, errs, ks] = randSingle(A, tols(2), bsize, q);        
-        Q = [Q Qs];
+        err = [err; errd];
+        k(idx) = kd;        
+    elseif precns(idx) == 2^(-24)
+        [Q, B, Rs, errs, ks] = randSingle(A, tols(idx), b, q, n, Q, B, nrmA);        
+        % if Q not empty reorthog
+        %if ~isempty(Q)
+        %    [Qs, ~] = qr(Qs - (Q*(Q'*Qs)), 0);
+        %end
+        
+        %Q = [Q Qs];
         A = Rs;
-        k(2) = ks;
-        err(its+1, 1) = errs;
-    elseif idx == 3
-        [Qh, Rh, errh, kh] = randHalf(A, tols(3), bsize, q);
+        k(idx) = ks;
+        err = [err; errs];
+    else
+        % it's half precision
+        [Q, B, Rh, errh, kh] = randHalf(A, tols(idx), b, q, n, Q, B, nrmA);
         A = Rh;
-        Q = [Q Qh];
-        k(3) = kh;
-        err(its+1, 1) = errh;
-    end
+        % if Q not empty re orthog
+        %if ~isempty(Q)
+        %    [Qh, ~] = qr(Qh - (Q*(Q'*Qh)), 0);
+        %end
+        
+        %Q = [Q Qh];
+        k(idx) = kh;
+        err = [err; errh];
+
+    end    
 end
 end
+

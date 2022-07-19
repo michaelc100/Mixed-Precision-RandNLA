@@ -1,4 +1,4 @@
-function [Q,A,err,k] = randDouble(A,tol,bsize,q,maxDim)
+function [Q,B,A,err,k] = randDouble(A,tol,bsize,q,maxDim)
 %RANDOMIZED_DOUBLE Randomized subspace iteration in fp64
 %
 %			   A - m-by-n input matrix
@@ -19,8 +19,10 @@ function [Q,A,err,k] = randDouble(A,tol,bsize,q,maxDim)
         q = 0;
     end
 
-    err = norm(A,'fro');
-    Q = zeros(m, 0); a = 1;
+    err = 1;
+    nrmA = norm(A, 'fro');
+    Q = zeros(m, 0); B = zeros(0, n);
+    a = 1;
 
     while (err(end,1) >= tol && ((a*bsize) <= maxDim))
         Om = randn(n, bsize);
@@ -37,14 +39,15 @@ function [Q,A,err,k] = randDouble(A,tol,bsize,q,maxDim)
             end
         end
         %re orthog if desired        
-        %[Qi, ~] = qr(Qi - (Q*(Q'*Qi)), 0);
+        [Qi, ~] = qr(Qi - (Q*(Q'*Qi)), 0);
+        Bi = Qi'*A;
         
-        A = A-(Qi*Qi'*A);
+        A = A-(Qi*Bi);
         Q = [Q Qi];
-        err(a,1) = norm(A,'fro');
+        B = [B; Bi];
+        err(a,1) = norm(A,'fro')/nrmA;
         a = a+1;
     end
     k = a - 1;        
     err = err(end, 1);
 end
-

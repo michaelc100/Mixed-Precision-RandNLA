@@ -7,7 +7,7 @@ phi = 1e8;
 % phi controls noise in matrix 2
 xi = 1e-4;
 u = 2^-24;
-type = 1 % choose which matrix type
+type = 1; % choose which matrix type
 points = 15;
 nValues = round(logspace(2, 3, points));
 errors = zeros(points, 1);
@@ -62,6 +62,7 @@ loglog(nValues, errors, 'o-', 'LineWidth', lw, 'MarkerSize', ms)
 yline(u, '--')
 xlabel('$n$', 'Interpreter', 'Latex', 'FontSize', fs)
 h = legend({'Worst bound', 'Prob bound', 'Exact bound', 'Error'}, 'Interpreter', 'Latex', 'FontSize', 16, 'Location', 'west')
+set(gca, 'XTick', round(logspace(2, 3, 5)))
 if type == 2 % slight shifting
     pos = get(h, 'Position')
     pos(2) = pos(2) + 0.02
